@@ -59,8 +59,6 @@ pub fn run() {
         })
         .build();
 
-    tokio::spawn(async {});
-
     tauri::Builder::default()
         .plugin(rspc_tauri::plugin(router.arced(), move |_| state.clone()))
         .plugin(tauri_plugin_opener::init())
