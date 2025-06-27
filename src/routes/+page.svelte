@@ -1,17 +1,14 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import { client } from "../lib/bindings";
+  import { command, None } from "../lib/bindings";
 
   let name = $state("");
   let greetMsg = $state("");
-
   let count = $state(0);
-  onDestroy(client.addSubscription(["count"], { onData: (c) => (count = c) }));
 
   async function greet(event: Event) {
     event.preventDefault();
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await client.query(["greet", name]);
+    greetMsg = await command("Greet", name);
   }
 </script>
 
@@ -38,9 +35,13 @@
   <p>{greetMsg}</p>
 
   <div class="row">
-    <button onclick={() => client.mutation(["decrement"])}>-1</button>
+    <button onclick={() => command("Decrement", None).then((c) => (count = c))}
+      >-1</button
+    >
     <span>{count}</span>
-    <button onclick={() => client.mutation(["increment"])}>+1</button>
+    <button onclick={() => command("Increment", None).then((c) => (count = c))}
+      >+1</button
+    >
   </div>
 </main>
 

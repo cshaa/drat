@@ -30,10 +30,8 @@ tokio = { version = "1.45.1", features = [
 ] }
 presage = { git = "https://github.com/whisperfish/presage" }
 presage-store-sled = { git = "https://github.com/whisperfish/presage" }
-rspc = "0.3.1"
-specta = "1.0.5"
-rspc-tauri = "0.1.1"
 tokio-stream = { version = "0.1.17", features = ["sync"] }
+ts-rs = "11.0.1"
 
 [patch.crates-io]
 curve25519-dalek = { git = 'https://github.com/signalapp/curve25519-dalek', tag = 'signal-curve25519-4.1.3' }
