@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -15,6 +15,7 @@ enum Command {
     Greet(String),
     Increment,
     Decrement,
+    Sleep(u32),
 }
 
 #[derive(TS, Serialize)]
@@ -23,23 +24,32 @@ enum CommandResult {
     Greet(String),
     Increment(i32),
     Decrement(i32),
+    Sleep(()),
 }
 
 #[tauri::command]
-fn command(state: tauri::State<Mutex<AppState>>, which: Command) -> CommandResult {
+async fn command<'a>(
+    state: tauri::State<'a, Mutex<AppState>>,
+    which: Command,
+) -> Result<CommandResult, ()> {
     match which {
-        Command::Greet(s) => {
-            CommandResult::Greet(format!("Hello, {}, you have been greeted from Rust!", s))
-        }
+        Command::Greet(s) => Ok(CommandResult::Greet(format!(
+            "Hello, {}, you have been greeted from Rust!",
+            s
+        ))),
         Command::Increment => {
             let mut state = state.lock().unwrap();
             state.counter += 1;
-            CommandResult::Increment(state.counter)
+            Ok(CommandResult::Increment(state.counter))
         }
         Command::Decrement => {
             let mut state = state.lock().unwrap();
             state.counter -= 1;
-            CommandResult::Decrement(state.counter)
+            Ok(CommandResult::Decrement(state.counter))
+        }
+        Command::Sleep(ms) => {
+            tokio::time::sleep(Duration::from_millis(ms.into())).await;
+            Ok(CommandResult::Sleep(()))
         }
     }
 }
