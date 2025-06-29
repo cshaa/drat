@@ -1,14 +1,13 @@
 <script lang="ts">
   import { command, None } from "../lib/bindings";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  let deviceName = $state("");
+  let url = $state("");
   let count = $state(0);
 
-  async function greet(event: Event) {
+  async function linkDevice(event: Event) {
     event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await command("Greet", name);
+    url = (await command("LinkSignal", { deviceName })).url;
   }
 
   async function sleep() {
@@ -33,11 +32,17 @@
   </div>
   <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
 
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
+  <form class="row" onsubmit={linkDevice}>
+    <input
+      id="greet-input"
+      placeholder="Enter a name..."
+      bind:value={deviceName}
+    />
+    <button type="submit">Link device</button>
   </form>
-  <p>{greetMsg}</p>
+  <p>
+    <a href={url}>{url}</a>
+  </p>
 
   <div class="row">
     <button onclick={() => command("Decrement", None).then((c) => (count = c))}
