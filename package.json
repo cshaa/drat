@@ -13,10 +13,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@rspc/client": "^0.3.1",
-    "@rspc/tauri": "^0.3.1",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-opener": "^2",
+    "@typek/typek": "npm:@jsr/typek__typek"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
