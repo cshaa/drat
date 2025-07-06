@@ -23,7 +23,7 @@ pub fn run() {
     let (counter_tx, _) = broadcast::channel(64);
     let state = Arc::new(Mutex::new(AppState {
         counter: 0,
-        counter_tx: counter_tx.clone(),
+        counter_tx,
     }));
 
     let router = Router::<Arc<Mutex<AppState>>>::new()
