@@ -1,11 +1,15 @@
 use futures_util::future;
 use presage::{libsignal_service::configuration::SignalServers, Manager};
+use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
+use ts_rs::TS;
 
+#[derive(TS, Serialize, Debug, Clone)]
+#[ts(export)]
 pub enum SignalState {
     None,
-    Linking,
+    Linking { url: String },
     Registering,
     Connected,
 }
@@ -14,16 +18,29 @@ pub enum SignalCommand {
     Link { device_name: String },
 }
 
-#[derive(Clone, Debug)]
+#[derive(TS, Clone, Debug, Serialize)]
+#[ts(export)]
 pub enum SignalEvent {
-    LinkingUrlAvailable(String),
     LinkingCancelled,
+}
+
+fn set_state(
+    state: &Arc<Mutex<SignalState>>,
+    state_change_tx: broadcast::Sender<()>,
+    value: SignalState,
+) {
+    {
+        let mut state = state.lock().unwrap();
+        *state = value;
+    }
+    state_change_tx.send(()).unwrap();
 }
 
 pub async fn run_signal(
     state: Arc<Mutex<SignalState>>,
     mut rx: mpsc::Receiver<SignalCommand>,
-    tx: broadcast::Sender<SignalEvent>,
+    event_tx: broadcast::Sender<SignalEvent>,
+    state_change_tx: broadcast::Sender<()>,
 ) -> Result<(), anyhow::Error> {
     let sqlite_db_path = directories::ProjectDirs::from("org", "whisperfish", "presage")
         .unwrap()
@@ -47,7 +64,9 @@ pub async fn run_signal(
     while let Some(cmd) = rx.recv().await {
         match cmd {
             SignalCommand::Link { device_name } => {
-                let tx = tx.clone();
+                let state = state.clone();
+                let event_tx = event_tx.clone();
+                let state_change_tx = state_change_tx.clone();
                 let (provisioning_link_tx, provisioning_link_rx) =
                     futures_channel::oneshot::channel();
                 let manager = future::join(
@@ -60,10 +79,16 @@ pub async fn run_signal(
                     async move {
                         match provisioning_link_rx.await {
                             Ok(url) => {
-                                tx.send(SignalEvent::LinkingUrlAvailable(url.as_str().into()))?;
+                                set_state(
+                                    &state,
+                                    state_change_tx,
+                                    SignalState::Linking {
+                                        url: url.as_str().into(),
+                                    },
+                                );
                             }
                             Err(_) => {
-                                tx.send(SignalEvent::LinkingCancelled)?;
+                                event_tx.send(SignalEvent::LinkingCancelled)?;
                             }
                         }
                         Ok::<(), anyhow::Error>(())

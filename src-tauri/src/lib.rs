@@ -4,18 +4,27 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tauri::ipc;
 use tokio::sync::{broadcast, mpsc};
 use ts_rs::TS;
 
-use crate::signal::{run_signal, SignalCommand, SignalEvent, SignalState};
-
 mod signal;
+use crate::signal::{run_signal, SignalCommand, SignalEvent, SignalState};
 
 #[derive(Debug)]
 struct AppState {
     counter: i32,
     signal_command_tx: mpsc::Sender<SignalCommand>,
-    signal_event_tx: broadcast::Sender<SignalEvent>,
+    signal_event: broadcast::Sender<SignalEvent>,
+    signal_state_change: broadcast::Sender<()>,
+    signal_state: Arc<Mutex<SignalState>>,
+}
+
+#[derive(TS, Serialize)]
+#[ts(export)]
+enum Event {
+    SignalStateChanged(SignalState),
+    SignalEvent(SignalEvent),
 }
 
 #[derive(TS, Deserialize)]
@@ -36,14 +45,11 @@ enum CommandResult {
     Increment(i32),
     Decrement(i32),
     Sleep(()),
-    LinkSignal { url: String },
+    LinkSignal(()),
 }
 
 #[derive(Serialize)]
-enum CommandError {
-    ConnectionBroke,
-    Cancelled,
-}
+enum CommandError {}
 
 #[tauri::command]
 async fn command<'a>(
@@ -70,25 +76,42 @@ async fn command<'a>(
             Ok(CommandResult::Sleep(()))
         }
         Command::LinkSignal { device_name } => {
-            let (tx, mut rx) = {
+            let tx = {
                 let state = state.lock().unwrap();
-                (
-                    state.signal_command_tx.clone(),
-                    state.signal_event_tx.subscribe(),
-                )
+                state.signal_command_tx.clone()
             };
             tx.send(SignalCommand::Link { device_name }).await.unwrap();
-            while let Ok(evt) = rx.recv().await {
-                match evt {
-                    SignalEvent::LinkingUrlAvailable(url) => {
-                        return Ok(CommandResult::LinkSignal { url });
-                    }
-                    SignalEvent::LinkingCancelled => return Err(CommandError::Cancelled),
-                }
-            }
-            Err(CommandError::ConnectionBroke)
+            Ok(CommandResult::LinkSignal(()))
         }
     }
+}
+
+#[tauri::command]
+async fn subscribe<'a>(
+    state: tauri::State<'a, Mutex<AppState>>,
+    channel: ipc::Channel<Event>,
+) -> Result<(), ()> {
+    let (mut signal_event, mut signal_state_change, signal_state) = {
+        let state = state.lock().unwrap();
+        (
+            state.signal_event.subscribe(),
+            state.signal_state_change.subscribe(),
+            state.signal_state.clone(),
+        )
+    };
+    let channel1 = channel.clone();
+    tokio::spawn(async move {
+        while let Ok(evt) = signal_event.recv().await {
+            channel1.send(Event::SignalEvent(evt)).unwrap();
+        }
+    });
+    tokio::spawn(async move {
+        while let Ok(()) = signal_state_change.recv().await {
+            let state = signal_state.lock().unwrap().clone();
+            channel.send(Event::SignalStateChanged(state)).unwrap();
+        }
+    });
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,8 +119,11 @@ pub fn run() {
     let signal_state = Arc::new(Mutex::new(SignalState::None));
 
     let (signal_command_tx, signal_command_rx) = tokio::sync::mpsc::channel(64);
-    let (signal_event_tx, mut signal_event_rx) = tokio::sync::broadcast::channel(64);
-    let signal_event_tx_thread = signal_event_tx.clone();
+    let (signal_event, _) = tokio::sync::broadcast::channel(64);
+    let (signal_state_change, _) = tokio::sync::broadcast::channel(1);
+    let signal_state_thread = signal_state.clone();
+    let signal_event_thread = signal_event.clone();
+    let signal_state_change_thread = signal_state_change.clone();
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -105,28 +131,29 @@ pub fn run() {
             .unwrap();
 
         runtime.block_on(async move {
-            run_signal(signal_state, signal_command_rx, signal_event_tx_thread)
-                .await
-                .unwrap();
+            run_signal(
+                signal_state_thread,
+                signal_command_rx,
+                signal_event_thread,
+                signal_state_change_thread,
+            )
+            .await
+            .unwrap();
         });
-    });
-
-    tokio::spawn(async move {
-        while let Ok(evt) = signal_event_rx.recv().await {
-            println!("Signal Event: {:?}", evt);
-        }
     });
 
     let app_state = Mutex::new(AppState {
         counter: 0,
         signal_command_tx,
-        signal_event_tx,
+        signal_event,
+        signal_state_change,
+        signal_state,
     });
 
     tauri::Builder::default()
         .manage(app_state)
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![command])
+        .invoke_handler(tauri::generate_handler![command, subscribe])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
