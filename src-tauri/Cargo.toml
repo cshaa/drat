@@ -30,8 +30,14 @@ tokio = { version = "1.45.1", features = [
 ] }
 presage = { git = "https://github.com/whisperfish/presage" }
 presage-store-sled = { git = "https://github.com/whisperfish/presage" }
+presage-store-sqlite = { git = "https://github.com/whisperfish/presage" }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 ts-rs = "11.0.1"
+directories = "6.0.0"
+anyhow = "1.0.98"
+futures-util = "0.3.31"
+futures-channel = "0.3.31"
+url = "2.5.4"
 
 [patch.crates-io]
 curve25519-dalek = { git = 'https://github.com/signalapp/curve25519-dalek', tag = 'signal-curve25519-4.1.3' }
