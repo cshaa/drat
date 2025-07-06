@@ -4,6 +4,8 @@ set positional-arguments
 default:
   @just --list
 
+dev: codegen (tauri "dev")
+
 codegen:
   cd src-tauri; cargo test export_bindings
 

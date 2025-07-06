@@ -69,7 +69,7 @@ pub async fn run_signal(
                 let state_change_tx = state_change_tx.clone();
                 let (provisioning_link_tx, provisioning_link_rx) =
                     futures_channel::oneshot::channel();
-                let manager = future::join(
+                let (Ok(manager), Ok(())) = future::join(
                     Manager::link_secondary_device(
                         config_store.clone(),
                         SignalServers::Staging,
@@ -94,19 +94,14 @@ pub async fn run_signal(
                         Ok::<(), anyhow::Error>(())
                     },
                 )
-                .await;
+                .await
+                else {
+                    println!("an oopsie");
+                    continue;
+                };
 
-                manager.1?;
-
-                match manager.0 {
-                    Ok(manager) => {
-                        let whoami = manager.whoami().await.unwrap();
-                        println!("{whoami:?}");
-                    }
-                    Err(err) => {
-                        println!("{err:?}");
-                    }
-                }
+                let whoami = manager.whoami().await.unwrap();
+                println!("{whoami:?}");
             }
         }
     }
