@@ -10,6 +10,11 @@
     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
     greetMsg = await command("Greet", name);
   }
+
+  async function sleep() {
+    await command("Sleep", 2_000);
+    alert("slept & woke");
+  }
 </script>
 
 <main class="container">
@@ -43,6 +48,8 @@
       >+1</button
     >
   </div>
+
+  <button onclick={sleep}>Sleep</button>
 </main>
 
 <style>
